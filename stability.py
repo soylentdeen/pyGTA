@@ -11,9 +11,9 @@ class InstrumentSuite(object):
         self.mono = monochromator.Monochromator(sim, parameters)
         self.srs = srs510.SRS510(sim, parameters)
         self.motor = motion_control.Motion_Controller(parameters)
-        #success = self.motor.go_home()
-        #if success != 1:
-        #    print 'Error!  Motor did not go home!'
+        success = self.motor.go_home()
+        if success != 1:
+            print 'Error!  Motor did not go home!'
 
     def close(self):
         self.mono.close()

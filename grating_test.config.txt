@@ -34,7 +34,7 @@ GEARING_RATIO = 180.0
 MICROSTEPS = 51200.0
 
 #home_pos_angle - approximate angle between the home position and the optical axis of the system
-HOME_POS_ANGLE = -14.9
+HOME_POS_ANGLE = -13.9
 
 #home_pos_steps - Defines "home" in terms of steps.  (should probably always be 0)
 HOME_POS_STEPS = 0

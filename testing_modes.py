@@ -131,13 +131,12 @@ class Stability( Mode ):
         self.background = None
 
         # Set monochromator to correct wavelength
-        #self.inst_suite.mono.goto_wavelength(self.wl)
+        self.inst_suite.mono.goto_wavelength(self.wl)
 
         # Open filter wheel
-        #self.inst_suite.mono.open_shutter()
+        self.inst_suite.mono.open_shutter()
 
         # Find middle of PSF
-        '''
         print "Finding Middle of beam"
         angles = numpy.linspace(-0.5, 0.5, 11)
         y = []
@@ -155,8 +154,7 @@ class Stability( Mode ):
         # Find the maximum value of y, go to that beta angle
         order = numpy.array(zip(*y)[0]).argsort()
         self.inst_suite.motor.goto(angles[order[-1]])
-        '''
-
+        
         # Close filter wheel
         self.inst_suite.mono.close_shutter()
 
@@ -169,7 +167,7 @@ class Stability( Mode ):
         
         # Open filter wheel
         self.inst_suite.mono.open_shutter()
-        self.inst_suite.mono.goto_wavelength(self.wl)
+        #self.inst_suite.mono.goto_wavelength(self.wl)
         time.sleep(self.parameters['SETTLE_TIME'])
 
         self.start_time = time.time()
@@ -182,6 +180,8 @@ class Stability( Mode ):
 
         milestones = numpy.linspace(0, self.test_time, n_milestones+1)
         last_milestone = 0
+
+        wave = self.inst_suite.mono.read_wavelength()
         
         while self.elapsed_time[-1] < self.test_time:
             if (len(milestones) > last_milestone+1):
@@ -192,7 +192,6 @@ class Stability( Mode ):
                     status = self.twitterer.tweet(mesg)
                     
             # Take reference measurement
-            wave = self.inst_suite.mono.read_wavelength()
             self.time_sequence.append(self.inst_suite.srs.measure_const_SNR(self.SNR))
             self.elapsed_time.append(time.time()-self.start_time)
             for i in numpy.arange(len(txt_out)):
