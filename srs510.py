@@ -28,6 +28,7 @@ Returns:
         self.gain = int(self.get_gain_setting())
         #print 'Gain setting is :' + str(self.gain)
         self.autorange = (parameters['LOCKIN_AUTORANGE']=='TRUE')
+        self.previous_reading = 0.5               # stores the previous measurement.  To be used to determine if we need to switch ranges
 
 
     '''
@@ -106,8 +107,16 @@ Returns:
         tstart = time.time()
         t = time.time()-tstart
 
-        temp = self.ser.read(0)
-        overload_counter = 0
+        temp = self.ser.read(0)      # clears out anything in the buffer
+
+        # Need to see if previous measurement warrants increasing the gain
+        full_scale = self.sensitivity[self.gain]
+        next_full_scale = self.sensitivity[self.gain-1]
+        if (self.previous_reading < 0.8*next_full_scale):
+            self.gain -= 1
+            self.ser.write('G%d\r\nD1\r\n' %int(self.gain))
+            time.sleep(0.25)
+
         while ( ((snr <= SNR_min) or (t <= self.t_min)) and (t <= self.t_max)):
             # See if we are saturated
             if ( self.autorange ):
@@ -126,7 +135,6 @@ Returns:
                 if ( ovrld == 1 and self.gain < 24):
                     #print 'Overloaded!'
                     self.gain += 1
-                    overload_counter += 1
                     self.ser.write('G%d\r\n' % int(self.gain))
                     time.sleep(2.0)
                     t2 = time.time()
@@ -147,25 +155,6 @@ Returns:
                 
             signal = numpy.mean(measurements)
 
-            # If autoranging is enabled, see if we
-            # are below 20% of gain value
-            if (self.autorange):
-                t1 = time.time()
-                full_scale = self.sensitivity[self.gain]
-                #print 'Full scale sensitivity = '+str(full_scale)
-                #print 'Signal = '+str(signal)
-                #print 'fraction = '+str(signal/full_scale)
-                if ( (abs(signal) < 0.1*full_scale) and (overload_counter < 1) ):
-                    self.gain -= 1
-                    self.ser.write('G%d\r\n' %int(self.gain))
-                    time.sleep(0.25)
-                    self.ser.write('D1\r\n')
-                    #print "New gain = "+str(self.gain)
-                    junk = measurements.pop()
-                    time.sleep(1.5)
-                    t2 = time.time()
-                    tstart += t2-t1
-
             # Calculate signal-to-noise ratio
             noise = numpy.std(measurements)/(len(measurements))**0.5
             if (len(measurements) >= 2):
@@ -176,6 +165,7 @@ Returns:
 
         avg = numpy.mean(measurements)
         std = numpy.std(measurements)
+        self.previous_reading = avg
         return [avg, std/(len(measurements))**0.5]
 
 

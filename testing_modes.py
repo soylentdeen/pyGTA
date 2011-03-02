@@ -514,6 +514,7 @@ class BlazeEfficiency( Mode ):
         x = numpy.linspace(self.parameters['REF_START_BETA'], self.parameters['REF_STOP_BETA'], self.parameters['N_REF_PTS'])
         y = []
         self.inst_suite.mono.close_shutter()
+        junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
         for b in x:
             txt_out = "Angle = "+str(b)
             sys.stdout.write(txt_out)
