@@ -112,7 +112,7 @@ Returns:
         # Need to see if previous measurement warrants increasing the gain
         full_scale = self.sensitivity[self.gain]
         next_full_scale = self.sensitivity[self.gain-1]
-        if (self.previous_reading < 0.8*next_full_scale):
+        if (self.previous_reading < 0.05*next_full_scale):
             self.gain -= 1
             self.ser.write('G%d\r\nD1\r\n' %int(self.gain))
             time.sleep(0.25)
