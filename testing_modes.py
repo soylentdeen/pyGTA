@@ -9,6 +9,7 @@ import matplotlib.pyplot as pyplot
 import GT_util
 
 class DispersiveElement( object ):
+    ''' Super Object for Gratings and Grisms '''
     def calc_beta(self):
         '''Returns the beta angle for a given measurement'''
 
@@ -66,6 +67,7 @@ class Mode( object ):
         """Sets up the mode"""
 
 class Stability( Mode ):
+    """ This object measures the stability of the monochromator setup """
     def __init__(self, inst_suite, parameters):
         self.inst_suite = inst_suite
         self.wl = None
@@ -128,6 +130,15 @@ class Stability( Mode ):
         self.inst_suite.mono.set_slit_width(self.slit_width)
 
     def get_Background(self):
+        """ Measures the background for the stability scan.
+        
+        First must find the angular location of the peak of the beam, by
+        opening the shutter, and scanning across the beam.  Then, the program
+        will close the shutter, and move back to the location of the peak.
+
+        Then, the background measurement is taken.
+        
+        """
         self.background = None
 
         # Set monochromator to correct wavelength
@@ -222,8 +233,63 @@ class Stability( Mode ):
         status = self.twitterer.tweet(mesg)
         print status
 
+
+
+
+
 class TransmissionEfficiency( Mode ):
-    ''' Tests the straight-through transmission efficiency of a slab of non-dispersive material. '''
+    '''
+    
+    Tests the straight-through transmission efficiency of a slab of
+    non-dispersive material.
+
+    The slab should be oriented so that it is normal to the beam.
+
+    This mode operates in the following manner:
+
+    1) Setup - determines parameters for the scan ( wavelength range, etc...)
+    2) Background Measurement - Determines the background for the reference
+            measurements. (Without slab in beam).
+    3) Reference Measurement - Determines the reference throughput of the
+            system at the different wavelengths. (Without slab in beam)
+    4) Placement of slab in beam - Halts until user places slab in beam
+    5) Transmission Measurement - With the beam in the system, the monochromator
+            scans through the selected wavelengths, while keeping the detector
+            arm fixed.  Since the slab is not dispersive, the difference
+            between the measurement through the slab and the reference
+            measurement is a measure of the transmission of the slab.
+
+    Inputs:
+       -initialization - TransmissionEfficiency(inst_suite, parameters)
+             - inst_suite - collection of objects which talk to the various
+                     instruments (DK480, SRS510, Labview Motor Controller)
+             - parameters - python dictionary of parameters contained in the
+                     grating_test.config.txt file
+       
+       -.setup() - None
+
+       -.get_Background() - None
+
+       -.get_Reference() - None
+       
+       -.get_Transmission(outfile)
+              - outfile - the name of the file which the output is to be saved
+
+       -.run(files)
+              - files - array of filenames.  This procedure calls all other
+                    procedures (setup, get_Background, etc...)  in the
+                    necessary order.
+
+    Outputs:
+       -.get_Transmission(outfile)
+              - outfile - raw data from the transmission scan
+              - outfile_raw.png - raw data plot showing both transmission and 
+                       reference data
+              - outfile.png - graph of transmission scan (wl vs transmission)
+                       with the transmission data normalized by the
+                       reference data.
+    
+    '''
     def __init__(self, inst_suite, parameters):
         self.inst_suite = inst_suite
         self.wl = []
@@ -361,7 +427,7 @@ class TransmissionEfficiency( Mode ):
 
         GT_util.save_figure([self.wl, self.wl], [zip(*self.reference)[0], zip(*self.measurement)[0]], [zip(*self.reference)[1], zip(*self.measurement)[1]], ['Reference Beam', self.material_name], 'Raw Transmission', 'Wavelength (nanometers)', 'Signal (V)', out_file+'_raw_.png')
 
-        GT_util.save_figure([self.wl], [zip(*self.transmission)[0]], [zip(*self.transmission)[1]], [self.material_name+' Transmission'], 'Normalized Transmission', 'Wavelength (nanometers)', 'Transmission', out_file+'_.png')
+        GT_util.save_figure([self.wl], [zip(*self.transmission)[0]], [zip(*self.transmission)[1]], [self.material_name+'Transmission'], 'Normalized Transmission', 'Wavelength (nanometers)', 'Transmission', out_file+'.png')
 
         with open(out_file, 'a') as f:
             f.write('Background = '+str(self.background[0])+' +/- '+str(self.background[1])+'\n')
@@ -383,6 +449,69 @@ class TransmissionEfficiency( Mode ):
         self.get_Transmission(transmission_file)
 
 class BlazeEfficiency( Mode ):
+    '''
+    
+    Tests the transmission efficiency of a dispersive element over a
+    user-defined wavelength range.
+
+    The dispersive element should be oriented so that the angle of the entrance
+    face can be accurately and reliably measured normal to the beam.
+
+    This mode operates in the following manner:
+
+    1) Setup - determines parameters for the scan ( wavelength range, etc...)
+    2) Background Measurement - Determines the background for the reference
+            measurements. (Without dispersive element in beam).
+    3) Reference Measurement - Determines the reference throughput of the
+            system at the different wavelengths. (Without dispersive element
+            in beam)
+    4) Placement of dispersive element in beam - Halts until user
+            places slab in beam
+    5) Transmission Measurement - With the beam in the system, the monochromator
+            scans through the selected wavelengths, while moving the detector
+            arm to the angle predicted by the grating equation for each 
+            wavelength and order.  The difference between the measurement
+            of the diffracted beam and the reference measurement is a
+            measure of the diffraction efficiency of the dispersive element.
+
+    Inputs:
+       -initialization - TransmissionEfficiency(inst_suite, parameters)
+             - inst_suite - collection of objects which talk to the various
+                     instruments (DK480, SRS510, Labview Motor Controller)
+             - parameters - python dictionary of parameters contained in the
+                     grating_test.config.txt file
+       
+       -.setup(dispersive_element)
+              - Gets from user parameters corresponding to the dispersive
+                element and prepares for the scan.
+
+       -.get_Background(bg_file)
+              - bg_file - filename in which to store background data
+
+       -.get_PSF(psf_file)
+              - psf_file - filename in which to store data about the PSF
+       
+       -.sweep(beta, psf, scale_factor, wl, raw_file):
+              - beta - angle at which grating is calculated to place light
+              - PSF - list containing angle vs intensity measurements about the
+                      reference PSF of the system
+              - scale_factor - the factor by which readings at this wavelength
+                      differ from the intensity of the wavelength at which the
+                      PSF was recorded
+              - wl - wavelength of this sweep
+              - raw_file - the name of the file which the output is to be saved
+
+       -.run(files)
+              - files - array of filenames.  This procedure calls all other
+                    procedures (setup, get_Background, etc...)  in the
+                    necessary order.
+
+    Outputs:
+       -.get_Background(bg_file)
+       -.get_PSF(psf_file)
+       -.sweep(beta, psf, scale_factor, wl, raw_file)
+       -.run(files)
+    '''
     def __init__( self, inst_suite, parameters ):
         """ Sets up the blaze efficiency mode"""
         self.inst_suite = inst_suite
@@ -603,16 +732,17 @@ class BlazeEfficiency( Mode ):
 
         # creates array of beta angles to check
         x = numpy.linspace(beta+self.parameters['SWEEP_START_BETA'], beta+self.parameters['SWEEP_STOP_BETA'], self.parameters['N_SWEEP_PTS'])
-        x_zoom = numpy.linspace(beta-0.15, beta+0.15, 11)
-        below = scipy.where(x < beta-0.15)
-        above = scipy.where(x > beta+0.15)
-        new_x = []
-        for bm in below[0]:
-            new_x.append(x[bm])
-        for i in x_zoom:
-            new_x.append(i)
-        for bm in above[0]:
-            new_x.append(x[bm])
+        if (self.parameters['X_ZOOM'] == 'True'):
+            x_zoom = numpy.linspace(beta-0.15, beta+0.15, 11)
+            below = scipy.where(x < beta-0.15)
+            above = scipy.where(x > beta+0.15)
+            new_x = []
+            for bm in below[0]:
+                new_x.append(x[bm])
+            for i in x_zoom:
+                new_x.append(i)
+            for bm in above[0]:
+                new_x.append(x[bm])
 
         x = numpy.array(new_x)
         y = []
@@ -636,59 +766,32 @@ class BlazeEfficiency( Mode ):
         #print "Scale Factor :", scale_factor
         # Scales the PSF by the scale factor
         y_psf = numpy.array([s[0] for s in psf[1]])*scale_factor
+        psf_err = y_psf+numpy.random.normal(0, psf[2])*scale_factor
         y_obs = [s[0] for s in y]
+        y_err = [s[1] for s in y]
+
 
         #integrate under the beam
         beam = scipy.integrate.simps(y_psf, psf[0])
-        print 'Beam signal = ', beam
+        beam_err = scipy.integrate.simps(psf_err, psf[0])
+        print 'Beam signal = ', beam, ' +/- ', beam_err
 
         #integrate under the order
         observations = scipy.integrate.simps(y_obs, x)
-        print 'Observed signal = ', observations
+        obs_err = scipy.integrate.simps(y_err, x)
+        print 'Observed signal = ', observations, ' +/- ', obs_err
         
-        retval = (1.0*observations)/(beam*1.0)
+        eff = (1.0*observations)/(beam*1.0)
+        d_eff = ((obs_err/(beam*1.0))**2.0 +(beam_err*(1.0*observations)/(beam*1.0)**2.0)*2.0)**(0.5)
 
-        print 'Efficiency = ', retval
-
-        '''
-        # beam and observations are interpolation objects.
-        #print psf[0]
-        #print y_psf
-        beam = scipy.interpolate.interpolate.interp1d(psf[0], y_psf, bounds_error=False)
-        observations = scipy.interpolate.interpolate.interp1d(x, y_obs, bounds_error=False)
-
-        # interpolates the observed data with a sampling of 10x
-        xnew = numpy.linspace(beta-self.parameters['SWEEP_START_BETA'], beta+self.parameters['SWEEP_STOP_BETA'], self.parameters['N_SWEEP_PTS']*10.0)
-        y_new = observations(xnew)
-
-        # Initial guess for efficiency is just ratio of observaed maximum to PSF maximum
-        pguess = [float(max(y_new))/float(max(y_psf)), 0.0]
-
-        # Attempts to scale the observations to the PSF using two varibles
-        # p[0] - efficiency (1.0 = 100%, 0.0 = 0%)
-        # p[1] - x_slop (offsets the measured points in x)
-        try:
-            fitfunc = lambda p, beta: p[0]*beam(xnew-beta+p[1])
-            def errfunc(p, beta, y):
-                newpsf = fitfunc(p, beta)
-                #print "P = ", p, ", beta = ", beta
-                bm = scipy.where( (numpy.isfinite(newpsf)) & (numpy.isfinite(y)) )
-                #print bm
-                return newpsf[bm] - y[bm]
-            p1, success = scipy.optimize.leastsq(errfunc, pguess, args = (beta, y_new))
-            #p1 = [0.3, 0.1]
-            print "Fitting Coefficients are : ", p1
-        except:
-            print "ERROR!  Fit did not converge!"
-            p1 = [0.0, 0.0]
-        '''
+        print 'Efficiency = ', eff, ' +/- ', d_eff
 
         with open(raw_file, 'a') as f:
             f.write(str(wl)+'\n')
             for angle, reading, dreading in zip(x, zip(*y)[0], zip(*y)[1]):
                 f.write(str(angle)+', '+str(reading)+', '+str(dreading)+'\n')
                     
-        return retval, x, zip(*y)[0], zip(*y)[1]
+        return eff, d_eff, x, zip(*y)[0], zip(*y)[1]
 
     def run(self, files):
         mesg = 'Bully! I should be delighted to undertake this endeavor for you!  Haunting optics benches gets so dreadfully boring'
@@ -771,9 +874,9 @@ class BlazeEfficiency( Mode ):
                     #print self.inst_suite.mono.read_wavelength()
                     time.sleep(2.0)
                 print "Motor Controller, please go to ", beta+self.alpha, " degrees"
-                coeff, x, y, dy = self.sweep(beta+self.alpha, psfs[0], (psf_scale_factor[1]/psfs[1][1]), wl, raw_file)
+                coeff, d_coeff, x, y, dy = self.sweep(beta+self.alpha, psfs[0], (psf_scale_factor[1]/psfs[1][1]), wl, raw_file)
                 self.readings.append(coeff)
-                self.d_readings.append(coeff/10.0)
+                self.d_readings.append(d_coeff)
                 xpts.append(x)
                 ypts.append(y)
                 dypts.append(dy)
@@ -992,39 +1095,6 @@ class PSF_tester( Mode ):
         retval = (1.0*observations)/(beam*1.0)
 
         print 'Efficiency = ', retval
-
-        '''
-        # beam and observations are interpolation objects.
-        #print psf[0]
-        #print y_psf
-        beam = scipy.interpolate.interpolate.interp1d(psf[0], y_psf, bounds_error=False)
-        observations = scipy.interpolate.interpolate.interp1d(x, y_obs, bounds_error=False)
-
-        # interpolates the observed data with a sampling of 10x
-        xnew = numpy.linspace(beta-self.parameters['SWEEP_START_BETA'], beta+self.parameters['SWEEP_STOP_BETA'], self.parameters['N_SWEEP_PTS']*10.0)
-        y_new = observations(xnew)
-
-        # Initial guess for efficiency is just ratio of observaed maximum to PSF maximum
-        pguess = [float(max(y_new))/float(max(y_psf)), 0.0]
-
-        # Attempts to scale the observations to the PSF using two varibles
-        # p[0] - efficiency (1.0 = 100%, 0.0 = 0%)
-        # p[1] - x_slop (offsets the measured points in x)
-        try:
-            fitfunc = lambda p, beta: p[0]*beam(xnew-beta+p[1])
-            def errfunc(p, beta, y):
-                newpsf = fitfunc(p, beta)
-                #print "P = ", p, ", beta = ", beta
-                bm = scipy.where( (numpy.isfinite(newpsf)) & (numpy.isfinite(y)) )
-                #print bm
-                return newpsf[bm] - y[bm]
-            p1, success = scipy.optimize.leastsq(errfunc, pguess, args = (beta, y_new))
-            #p1 = [0.3, 0.1]
-            print "Fitting Coefficients are : ", p1
-        except:
-            print "ERROR!  Fit did not converge!"
-            p1 = [0.0, 0.0]
-        '''
 
         with open(raw_file, 'a') as f:
             f.write(str(wl)+'\n')

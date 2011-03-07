@@ -39,7 +39,8 @@ HOME_POS_ANGLE = -13.9
 #home_pos_steps - Defines "home" in terms of steps.  (should probably always be 0)
 HOME_POS_STEPS = 0
 
-
+#x_zoom - whether or not to finely sample angles near the peak of the blaze
+X_ZOOM = TRUE
 
 #Monochromator Settings
 #==================================
