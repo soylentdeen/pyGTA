@@ -1,1 +1,3 @@
 *.py~
+/Data/*
+grating_test.config

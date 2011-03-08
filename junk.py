@@ -21,11 +21,11 @@ print "Grating Testing Program"
 print "Cross your fingers!"
 
 sim = False
-#srs = srs510.SRS510(sim, parameters)
+srs = srs510.SRS510(sim, parameters)
 
-#a = srs.measure_const_SNR(10)
+a = srs.measure_const_SNR(10)
 
-#'''
+'''
 mono = monochromator.Monochromator(False, parameters)
 
 print mono.read_wavelength()
@@ -37,13 +37,13 @@ mono.set_slit_width(500)
 #raw_input()
 
 '''
-mono.move_filter_wheel(4)
+#mono.move_filter_wheel(4)
 
-raw_input("Filter wheel moved to position 4")
+#raw_input("Filter wheel moved to position 4")
 
-mono.move_filter_wheel(6)
+#mono.move_filter_wheel(6)
 
-raw_input("Filter wheel moved to position 6")
+#raw_input("Filter wheel moved to position 6")
 '''
 
 mono.move_filter_wheel(1)

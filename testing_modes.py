@@ -650,6 +650,7 @@ class BlazeEfficiency( Mode ):
             self.inst_suite.motor.goto(b)
             time.sleep(self.parameters['SETTLE_TIME'])
             y.append(self.inst_suite.srs.measure_const_SNR(self.SNR))
+            '''
             for i in numpy.arange(len(txt_out)):
                 sys.stdout.write('\b')
             for i in numpy.arange(len(txt_out)):
@@ -657,6 +658,8 @@ class BlazeEfficiency( Mode ):
             for i in numpy.arange(len(txt_out)):
                 sys.stdout.write('\b')
             sys.stdout.flush()
+            '''
+            print y[-1], y[-1][0]/y[-1][1]
 
         self.background = [x, y]
 
@@ -743,8 +746,8 @@ class BlazeEfficiency( Mode ):
                 new_x.append(i)
             for bm in above[0]:
                 new_x.append(x[bm])
-
-        x = numpy.array(new_x)
+            x = numpy.array(new_x)
+            
         y = []
         for b in x:
             txt_out = "Angle = "+str(b)
@@ -766,7 +769,7 @@ class BlazeEfficiency( Mode ):
         #print "Scale Factor :", scale_factor
         # Scales the PSF by the scale factor
         y_psf = numpy.array([s[0] for s in psf[1]])*scale_factor
-        psf_err = y_psf+numpy.random.normal(0, psf[2])*scale_factor
+        psf_err = y_psf+numpy.random.normal(0, numpy.array([s[1] for s in psf[1]])*scale_factor)
         y_obs = [s[0] for s in y]
         y_err = [s[1] for s in y]
 
