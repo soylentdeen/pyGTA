@@ -16,7 +16,7 @@ N_REF_PTS = 30
 N_SWEEP_PTS = 15
 
 #settle_time - Time to wait in between measurements (to allow for motors to move, signals to stabilize, etc...)
-SSETTLE_TIME = 1.0
+SETTLE_TIME = 1.0
 
 #background_scan - True if you want to take a background scan, False if not
 BACKGROUND_SCAN = False
