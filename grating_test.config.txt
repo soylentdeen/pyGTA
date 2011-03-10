@@ -4,19 +4,22 @@
 DATA_DIR = ./Data/
 
 #ref_start(stop)_beta - Angle at which background/reference measurments will start(stop)
-REF_START_BETA = -2.5
-REF_STOP_BETA = 2.5
+REF_START_BETA = -3
+REF_STOP_BETA = 3
 
 #sweep_start(stop)_beta - Angle at which sweeps are started(stopped) relative to the nominal calculated angle of the order.
-SWEEP_START_BETA = -2.5
+SWEEP_START_BETA = -3.5
 SWEEP_STOP_BETA = 2.5
 
 #n_ref(sweep)_pts - Number of intermediate angles at which the background will be sampled
-N_REF_PTS = 11
-N_SWEEP_PTS = 11
+N_REF_PTS = 30
+N_SWEEP_PTS = 15
 
 #settle_time - Time to wait in between measurements (to allow for motors to move, signals to stabilize, etc...)
-SETTLE_TIME = 1.0
+SSETTLE_TIME = 1.0
+
+#background_scan - True if you want to take a background scan, False if not
+BACKGROUND_SCAN = False
 
 #Motor Control Settings
 #=================================
@@ -40,7 +43,7 @@ HOME_POS_ANGLE = -14.9
 HOME_POS_STEPS = 0
 
 #x_zoom - whether or not to finely sample angles near the peak of the blaze
-X_ZOOM = FALSE
+X_ZOOM = TRUE
 
 #Monochromator Settings
 #==================================

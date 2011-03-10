@@ -6,7 +6,8 @@ import scipy.optimize
 import scipy.interpolate
 import scipy.integrate
 import matplotlib.pyplot as pyplot
-import GT_util
+import GT_util\
+
 
 class DispersiveElement( object ):
     ''' Super Object for Gratings and Grisms '''
@@ -642,24 +643,29 @@ class BlazeEfficiency( Mode ):
     def get_Background(self, bg_file):
         x = numpy.linspace(self.parameters['REF_START_BETA'], self.parameters['REF_STOP_BETA'], self.parameters['N_REF_PTS'])
         y = []
-        self.inst_suite.mono.close_shutter()
-        junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
-        for b in x:
-            txt_out = "Angle = "+str(b)
-            sys.stdout.write(txt_out)
-            self.inst_suite.motor.goto(b)
-            time.sleep(self.parameters['SETTLE_TIME'])
-            y.append(self.inst_suite.srs.measure_const_SNR(self.SNR))
-            '''
-            for i in numpy.arange(len(txt_out)):
-                sys.stdout.write('\b')
-            for i in numpy.arange(len(txt_out)):
-                sys.stdout.write(' ')
-            for i in numpy.arange(len(txt_out)):
-                sys.stdout.write('\b')
-            sys.stdout.flush()
-            '''
-            print y[-1], y[-1][0]/y[-1][1]
+        if (self.parameters['BACKGROUND_SCAN'] == True):
+            self.inst_suite.mono.close_shutter()
+            self.inst_suite.motor.goto(x[0])
+            junk = self.inst_suite.measure_const_SNR(self.SNR)
+            for b in x:
+                txt_out = "Angle = "+str(b)
+                sys.stdout.write(txt_out)
+                self.inst_suite.motor.goto(b)
+                time.sleep(self.parameters['SETTLE_TIME'])
+                y.append(self.inst_suite.srs.measure_const_SNR(self.SNR))
+                '''
+                for i in numpy.arange(len(txt_out)):
+                    sys.stdout.write('\b')
+                for i in numpy.arange(len(txt_out)):
+                    sys.stdout.write(' ')
+                for i in numpy.arange(len(txt_out)):
+                    sys.stdout.write('\b')
+                sys.stdout.flush()
+                '''
+                print y[-1], y[-1][0]/y[-1][1]
+        else:
+            for b in x:
+                y.append([0.0, 0.0])
 
         self.background = [x, y]
 
@@ -684,6 +690,8 @@ class BlazeEfficiency( Mode ):
         y = []
 
         print "Starting PSF Scan"
+        self.inst_suite.motor.goto(self.background[0][0])
+        junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
         for b, y_bkgnd in zip(self.background[0], self.background[1]):
             txt_out = "Angle = "+str(b)
             sys.stdout.write(txt_out)
@@ -749,6 +757,8 @@ class BlazeEfficiency( Mode ):
             x = numpy.array(new_x)
             
         y = []
+        self.inst_suite.motor.goto(x[0])
+        junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
         for b in x:
             txt_out = "Angle = "+str(b)
             sys.stdout.write(txt_out)
@@ -769,7 +779,7 @@ class BlazeEfficiency( Mode ):
         #print "Scale Factor :", scale_factor
         # Scales the PSF by the scale factor
         y_psf = numpy.array([s[0] for s in psf[1]])*scale_factor
-        psf_err = y_psf+numpy.random.normal(0, numpy.array([s[1] for s in psf[1]])*scale_factor)
+        psf_err = numpy.random.normal(0, numpy.array([s[1] for s in psf[1]])*scale_factor)
         y_obs = [s[0] for s in y]
         y_err = [s[1] for s in y]
 
