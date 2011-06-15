@@ -58,7 +58,10 @@ class Mailer( object ):
         message['Subject'] = 'Message from Skynet'
         message['From'] = self.SENDER
         message['To'] = self.RECIPIENTS[0]
-        smtpresult = self.session.sendmail(self.SENDER, self.RECIPIENTS, message.as_string())
+        try:
+            smtpresult = self.session.sendmail(self.SENDER, self.RECIPIENTS, message.as_string())
+        except:
+            print 'No Email addresses entered!'
         
     def close(self):
         self.session.quit()

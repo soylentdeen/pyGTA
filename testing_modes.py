@@ -692,6 +692,9 @@ class BlazeEfficiency( Mode ):
         print "Starting PSF Scan"
         self.inst_suite.motor.goto(self.background[0][0])
         junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
+        print junk, self.inst_suite.srs.get_gain_setting()
+        junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
+        print junk, self.inst_suite.srs.get_gain_setting()
         for b, y_bkgnd in zip(self.background[0], self.background[1]):
             txt_out = "Angle = "+str(b)
             sys.stdout.write(txt_out)
@@ -699,6 +702,73 @@ class BlazeEfficiency( Mode ):
             time.sleep(self.parameters['SETTLE_TIME'])
             yval = self.inst_suite.srs.measure_const_SNR(self.SNR)
             y.append([yval[0] - y_bkgnd[0], (yval[1]**2 + y_bkgnd[1]**2)**(0.5)])
+            print yval, self.inst_suite.srs.get_gain_setting()
+            '''for i in numpy.arange(len(txt_out)):
+                sys.stdout.write('\b')
+            for i in numpy.arange(len(txt_out)):
+                sys.stdout.write(' ')
+            for i in numpy.arange(len(txt_out)):
+                sys.stdout.write('\b')
+            sys.stdout.flush()'''
+
+        retval.append([x, y])
+
+        # Find the maximum value of y, go to that beta angle
+        #print y
+        #print self.background[0]
+        order = numpy.array(zip(*y)[0]).argsort()
+        self.inst_suite.motor.goto(self.background[0][order[-1]])
+        bkgnd = self.background[1][order[-1]]
+
+        print "Sleeping for 10 seconds!"
+        time.sleep(10)
+
+        junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
+        print junk
+        
+        for wl in self.wl:
+            print "wavelength = "+str(wl)+"\n"
+            self.inst_suite.mono.goto_wavelength(wl)
+            time.sleep(self.parameters['SETTLE_TIME'])
+            reading = self.inst_suite.srs.measure_const_SNR(self.SNR)
+            retval.append([wl, reading[0]-bkgnd[0], (reading[1]**2.0+bkgnd[1]**2.0)**(0.5)])
+
+        with open(psf_file, 'a') as f:
+            for angle, reading in zip(*retval[0]):
+                f.write(str(angle)+', '+str(reading[0])+', '+str(reading[1])+'\n')
+            for wavelength, reading, dreading in retval[1:]:
+                f.write(str(wavelength)+ ', '+str(reading)+', '+str(dreading)+'\n')
+        GT_util.save_figure([retval[0][0]], [zip(*retval[0][1])[0]], [zip(*retval[0][1])[1]], [str(self.wl[0])], 'Background Subtracted Reference PSF', 'Angle (degrees)', 'Signal (V)', psf_file+'.png')
+        return retval
+
+    def sweep(self, beta, psf, scale_factor, wl, raw_file):
+        """ sweeps the detector through a range of angles centered on the predicted angle.
+            Fits the observed data to the reference PSF """
+
+        # creates array of beta angles to check
+        x = numpy.linspace(beta+self.parameters['SWEEP_START_BETA'], beta+self.parameters['SWEEP_STOP_BETA'], self.parameters['N_SWEEP_PTS'])
+        if (self.parameters['X_ZOOM'] == 'True'):
+            x_zoom = numpy.linspace(beta-0.15, beta+0.15, 11)
+            below = scipy.where(x < beta-0.15)
+            above = scipy.where(x > beta+0.15)
+            new_x = []
+            for bm in below[0]:
+                new_x.append(x[bm])
+            for i in x_zoom:
+                new_x.append(i)
+            for bm in above[0]:
+                new_x.append(x[bm])
+            x = numpy.array(new_x)
+            
+        y = []
+        self.inst_suite.motor.goto(x[0])
+        junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
+        for b in x:
+            txt_out = "Angle = "+str(b)
+            sys.stdout.write(txt_out)
+            self.inst_suite.motor.goto(b)
+            time.sleep(self.parameters['SETTLE_TIME'])
+            y.append(self.inst_suite.srs.measure_const_SNR(self.SNR))
             for i in numpy.arange(len(txt_out)):
                 sys.stdout.write('\b')
             for i in numpy.arange(len(txt_out)):
@@ -706,6 +776,406 @@ class BlazeEfficiency( Mode ):
             for i in numpy.arange(len(txt_out)):
                 sys.stdout.write('\b')
             sys.stdout.flush()
+
+        sys.stdout.write('\n')
+        #print "PSF :", psf
+        #print "PSF[1] :", psf[1]
+        #print "Scale Factor :", scale_factor
+        # Scales the PSF by the scale factor
+        y_psf = numpy.array([s[0] for s in psf[1]])*scale_factor
+        psf_err = numpy.random.normal(0, numpy.array([s[1] for s in psf[1]])*scale_factor)
+        y_obs = [s[0] for s in y]
+        y_err = [s[1] for s in y]
+
+
+        #integrate under the beam
+        beam = scipy.integrate.simps(y_psf, psf[0])
+        beam_err = scipy.integrate.simps(psf_err, psf[0])
+        print 'Beam signal = ', beam, ' +/- ', beam_err
+
+        #integrate under the order
+        observations = scipy.integrate.simps(y_obs, x)
+        obs_err = scipy.integrate.simps(y_err, x)
+        print 'Observed signal = ', observations, ' +/- ', obs_err
+        
+        eff = (1.0*observations)/(beam*1.0)
+        d_eff = ((obs_err/(beam*1.0))**2.0 +(beam_err*(1.0*observations)/(beam*1.0)**2.0)*2.0)**(0.5)
+
+        print 'Efficiency = ', eff, ' +/- ', d_eff
+
+        with open(raw_file, 'a') as f:
+            f.write(str(wl)+'\n')
+            for angle, reading, dreading in zip(x, zip(*y)[0], zip(*y)[1]):
+                f.write(str(angle)+', '+str(reading)+', '+str(dreading)+'\n')
+                    
+        return eff, d_eff, x, zip(*y)[0], zip(*y)[1]
+
+    def run(self, files):
+        mesg = 'Bully! I should be delighted to undertake this endeavor for you!  Haunting optics benches gets so dreadfully boring'
+        self.mailer.send_message(mesg)
+        status = self.twitterer.tweet(mesg)
+        print status
+
+        # Sets up the data files
+        data_file = files[0]
+        raw_file = files[1]
+        bg_file = files[2]
+        psf_file = files[3]
+        xpts = []
+        ypts = []
+        dypts = []
+        names = []
+        with open(data_file, 'a') as f:
+            f.write('Dispersive Element Properties\n========================\n')
+            if (type(self.disp_el) == Grism):
+                f.write('Type: Grism\n')
+            if (type(self.disp_el) == Grating):
+                f.write('Type: Grating\n')
+            f.write('Serial#/Identifier : '+str(self.disp_el.name)+'\n')
+            f.write('Grating Constant : ' + str(self.disp_el.d)+' grooves/mm\n')
+            f.write('                 = ' + str(self.disp_el.sigma)+' microns/groove\n')
+            if (type(self.disp_el) == Grism):
+                f.write('Wedge Angle : ' +str(self.disp_el.delta)+' degrees\n')
+                f.write('index of refraction : '+str(self.disp_el.n)+'\n')
+            f.write('Blaze Angle : ' + str(self.disp_el.blaze)+' degrees\n')
+            f.write('Alpha Angle : ' + str(self.alpha)+' degrees\n')
+            f.write('Diffraction Order : ' + str(self.order)+'\n')
+
+        # Zeros out the readings variable
+        self.readings = []
+        self.d_readings = []
+
+        # Ensure that all necessary variables are defined
+        if (len(self.beta) <= 0) or (len(self.wl) <= 0):
+            print "Error!  Set up the wavelength and alpha points!"
+        else:
+
+            # Measures the background
+            self.get_Background(bg_file)
+            mesg = 'Capital! The background scan has concluded!'
+            status = self.twitterer.tweet(mesg)
+            print status
+
+            # Measures the reference PSF
+            psfs = self.get_PSF(psf_file)
+
+            # Gets ready to take grating data
+            mesg = 'Non-corporeality has its drawbacks... I require assistance!  Would you be so kind as to place your grating in the beam!'
+            self.mailer.send_message(mesg)
+            status = self.twitterer.tweet(mesg)
+            print status
+
+            ch = raw_input('Place Grating in beam!')
+            if len(self.wl) < 4:
+                n_milestones = len(self.wl)
+            else:
+                n_milestones = 4
+            milestones = numpy.linspace(self.wl[0], self.wl[-1], n_milestones+1)
+            last_milestone = 0
+            for pair in zip(self.wl, self.beta, psfs[1:]):
+                wl = int(pair[0])
+                beta = float(pair[1])
+                psf_scale_factor = pair[2]
+
+                if (len(milestones) > last_milestone+1):
+                    if (wl > milestones[last_milestone+1]):
+                        last_milestone += 1
+                        fraction = str(((1.0*last_milestone)/(1.0*n_milestones)*100.0))
+                        mesg = 'Most momentus! I am '+fraction+'% done with the task! Huzzah!'
+                        status = self.twitterer.tweet(mesg)
+
+                print "Monochromator, please go to ", wl, " nanometers"
+                self.inst_suite.mono.goto_wavelength(wl)
+                time.sleep(10.0)
+                while (abs(self.inst_suite.mono.read_wavelength() - wl) > 1.0):
+                    #print self.inst_suite.mono.read_wavelength()
+                    time.sleep(2.0)
+                print "Motor Controller, please go to ", beta+self.alpha, " degrees"
+                coeff, d_coeff, x, y, dy = self.sweep(beta+self.alpha, psfs[0], (psf_scale_factor[1]/psfs[1][1]), wl, raw_file)
+                self.readings.append(coeff)
+                self.d_readings.append(d_coeff)
+                xpts.append(x)
+                ypts.append(y)
+                dypts.append(dy)
+                names.append(str(wl))
+                with open(data_file, 'a') as f:
+                    f.write(str(wl)+', '+str(beta)+', '+str(coeff)+'\n')
+                print self.readings[-1]
+            GT_util.save_figure(xpts, ypts, dypts, names, 'Raw Data', 'Angle (degrees)', 'Signal (V)', raw_file+'.png')
+            print 'wl: ', self.wl
+            print 'Readings : ', self.readings
+            print 'unc : ', self.d_readings
+            print 'name : ', self.disp_el.name
+            GT_util.save_figure([self.wl], [self.readings], [self.d_readings], [self.disp_el.name], 'Blaze Efficiency', 'Wavelength (nm)', 'Efficiency', data_file+'.png')
+        print "Done!"
+
+        mesg = 'Great Scott! I have finshed testing your grating.  Now off to do some haunting!'
+        self.mailer.send_message(mesg)
+        status = self.twitterer.tweet(mesg)
+        print status
+        self.mailer.close()
+
+class ImmersionTest( Mode ):
+    '''
+    
+    Tests the transmission efficiency of an immersion grating over a
+    user-defined wavelength range.
+
+    The dispersive element should be oriented so that the angle of the entrance
+    face can be accurately and reliably measured normal to the beam.
+
+    This mode operates in the following manner:
+
+    1) Setup - determines parameters for the scan ( wavelength range, etc...)
+    2) Background Measurement - Determines the background for the reference
+            measurements. (Without dispersive element in beam).
+    3) Reference Measurement - Determines the reference throughput of the
+            system at the different wavelengths. (Without dispersive element
+            in beam)
+    4) Placement of dispersive element in beam - Halts until user
+            places slab in beam
+    5) Transmission Measurement - With the beam in the system, the monochromator
+            scans through the selected wavelengths, while moving the detector
+            arm to the angle predicted by the grating equation for each 
+            wavelength and order.  The difference between the measurement
+            of the diffracted beam and the reference measurement is a
+            measure of the diffraction efficiency of the dispersive element.
+
+    Inputs:
+       -initialization - TransmissionEfficiency(inst_suite, parameters)
+             - inst_suite - collection of objects which talk to the various
+                     instruments (DK480, SRS510, Labview Motor Controller)
+             - parameters - python dictionary of parameters contained in the
+                     grating_test.config.txt file
+       
+       -.setup(dispersive_element)
+              - Gets from user parameters corresponding to the dispersive
+                element and prepares for the scan.
+
+       -.get_Background(bg_file)
+              - bg_file - filename in which to store background data
+
+       -.get_PSF(psf_file)
+              - psf_file - filename in which to store data about the PSF
+       
+       -.sweep(beta, psf, scale_factor, wl, raw_file):
+              - beta - angle at which grating is calculated to place light
+              - PSF - list containing angle vs intensity measurements about the
+                      reference PSF of the system
+              - scale_factor - the factor by which readings at this wavelength
+                      differ from the intensity of the wavelength at which the
+                      PSF was recorded
+              - wl - wavelength of this sweep
+              - raw_file - the name of the file which the output is to be saved
+
+       -.run(files)
+              - files - array of filenames.  This procedure calls all other
+                    procedures (setup, get_Background, etc...)  in the
+                    necessary order.
+
+    Outputs:
+       -.get_Background(bg_file)
+       -.get_PSF(psf_file)
+       -.sweep(beta, psf, scale_factor, wl, raw_file)
+       -.run(files)
+    '''
+    def __init__( self, inst_suite, parameters ):
+        """ Sets up the blaze efficiency mode"""
+        self.inst_suite = inst_suite
+        self.wl = []
+        self.beta = []
+        self.alpha = None
+        self.order = None
+        self.disp_el = None
+        self.parameters = parameters
+        self.mailer = None
+        self.twitterer = GT_util.Twitterer()
+
+    def setup(self, dispersive_element):
+        """ Gets necessary parameters from the user to start the observation """
+        wl_start = -1
+        while (wl_start < 0):
+            try:
+                wl_start = float(raw_input('Enter Wavelength Start (in nm) :'))
+            except:
+                wl_start = -1.0
+        wl_stop = -1.0
+        while (wl_stop < wl_start):
+            try:
+                wl_stop = float(raw_input('Enter Wavelength Stop (in nm) :'))
+            except:
+                wl_stop = -1.0
+        n_wl_pts = -1
+        while (n_wl_pts <=0):
+            try:
+                n_wl_pts = int(raw_input('How many intermediate wavelengths do you wish to measure? :'))
+            except:
+                n_wl_pts = -1
+
+        # Generates the list of wavelength points to test
+        self.wl = numpy.linspace(wl_start, wl_stop, n_wl_pts)
+
+        if ( dispersive_element == 'GRATING'):
+            a = True
+            while a == True:
+                try:
+                    blaze = float(raw_input('Enter the Blaze angle of the Grating : '))
+                    gconst = float(raw_input('Enter the Grating constant (g/mm) : '))
+                    n = float(raw_input('Enter the index of refraction : '))
+                    name = raw_input('Enter the name/SN of the grating: ')
+                    self.disp_el = Grating(n, blaze, name=name, d=gconst)
+                    a = False
+                except:
+                    print "Error! Please enter a sensible number!"
+        elif ( dispersive_element == 'GRISM'):
+            delta = None
+            blaze = None
+            while( not delta ):
+                try:
+                    delta = float(raw_input('Enter wedge angle of the prism :'))
+                except:
+                    delta = None
+                    
+            while( not blaze ):
+                try:
+                    blaze = float(raw_input('Enter groove angle (blaze) :'))
+                except:
+                    blaze = None
+                    
+            a = True
+            while a == True:
+                try:
+                    gperiod = float(raw_input('Enter the Groove Period (microns/groove) : '))
+                    n = float(raw_input('Enter the index of refraction : '))
+                    name = raw_input('Enter the name/SN of the grating: ')
+                    self.disp_el = Grism(n, delta, blaze, sigma=gperiod, name=name)
+                    a = False
+                except:
+                    print "Error! Please enter a sensible number!"
+
+
+        while( not self.alpha ):
+            try:
+                self.alpha = float(raw_input('Enter Alpha angle (degrees) :'))
+            except:
+                self.alpha = None
+
+        while (not self.order):
+            try:
+                self.order = float(raw_input('Enter the order you wish to test: '))
+            except:
+                self.order = None
+
+        # Calculates the beta angles for all the wavelengths to be tested
+        self.beta = self.disp_el.calc_beta(self.wl/1000.0, self.alpha, self.order)
+
+	    #Sets up the email
+        while (not self.mailer):
+            try:
+                emails = raw_input('Enter the email(s) you wish to notify when user intervention is required (separate with commas) :')
+                self.mailer = GT_util.Mailer(self.parameters["MAILSERVER"], self.parameters["SENDER"], emails.split(','))
+            except:
+                print 'Error! Enter a valid email address!'
+
+        # Gets the user's desired Signal-to-Noise ratio
+        a = True
+        while a == True:
+            try:
+                self.SNR = float(raw_input('Enter your desired Signal-to-Noise :'))
+                a = False
+            except:
+                print "Error! Please enter a sensible number!"
+                
+        self.filter = -1
+        while ( (self.filter <= 0) or (self.filter >= 7) ):
+            try:
+                self.filter = int(raw_input('Which Filter do you want to use?'))
+            except:
+                self.filter = -1
+        self.inst_suite.mono.set_filter(self.filter)
+
+        self.slit_width = -1
+        while ( (self.slit_width < 50) or (self.slit_width > 2000) ):
+            try:
+                self.slit_width = int(raw_input("Enter the monochromator slit width :"))
+            except:
+                self.slit_width = -1
+
+        self.inst_suite.mono.set_slit_width(self.slit_width)
+        
+        # Sets the self.background variable to an empty list
+        self.background = []
+
+    def get_Background(self, bg_file):
+        x = numpy.linspace(self.parameters['REF_START_BETA'], self.parameters['REF_STOP_BETA'], self.parameters['N_REF_PTS'])
+        y = []
+        if (self.parameters['BACKGROUND_SCAN'] == True):
+            self.inst_suite.mono.close_shutter()
+            self.inst_suite.motor.goto(x[0])
+            junk = self.inst_suite.measure_const_SNR(self.SNR)
+            for b in x:
+                txt_out = "Angle = "+str(b)
+                sys.stdout.write(txt_out)
+                self.inst_suite.motor.goto(b)
+                time.sleep(self.parameters['SETTLE_TIME'])
+                y.append(self.inst_suite.srs.measure_const_SNR(self.SNR))
+                '''
+                for i in numpy.arange(len(txt_out)):
+                    sys.stdout.write('\b')
+                for i in numpy.arange(len(txt_out)):
+                    sys.stdout.write(' ')
+                for i in numpy.arange(len(txt_out)):
+                    sys.stdout.write('\b')
+                sys.stdout.flush()
+                '''
+                print y[-1], y[-1][0]/y[-1][1]
+        else:
+            for b in x:
+                y.append([0.0, 0.0])
+
+        self.background = [x, y]
+
+        GT_util.save_figure([x], [zip(*y)[0]], [zip(*y)[1]], ['Background Signal'], 'Background', 'Angle (degrees)', 'Signal (V)', bg_file+'.png')
+        with open(bg_file, 'a') as f:
+            for angle, reading, dreading in zip(x, zip(*y)[0], zip(*y)[1]):
+                f.write(str(angle)+', '+str(reading)+', '+str(dreading)+'\n')
+        self.inst_suite.mono.open_shutter()
+        
+
+    def get_PSF(self, psf_file):
+        x = numpy.linspace(self.parameters['REF_START_BETA'], self.parameters['REF_STOP_BETA'], self.parameters['N_REF_PTS'])
+        xpts = []
+        ypts = []
+        dypts = []
+        names = []
+        retval = []
+
+        print self.wl[0]
+
+        self.inst_suite.mono.goto_wavelength(self.wl[0])
+        y = []
+
+        print "Starting PSF Scan"
+        self.inst_suite.motor.goto(self.background[0][0])
+        junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
+        print junk, self.inst_suite.srs.get_gain_setting()
+        junk = self.inst_suite.srs.measure_const_SNR(self.SNR)
+        print junk, self.inst_suite.srs.get_gain_setting()
+        for b, y_bkgnd in zip(self.background[0], self.background[1]):
+            txt_out = "Angle = "+str(b)
+            sys.stdout.write(txt_out)
+            self.inst_suite.motor.goto(b)
+            time.sleep(self.parameters['SETTLE_TIME'])
+            yval = self.inst_suite.srs.measure_const_SNR(self.SNR)
+            y.append([yval[0] - y_bkgnd[0], (yval[1]**2 + y_bkgnd[1]**2)**(0.5)])
+            print yval, self.inst_suite.srs.get_gain_setting()
+            '''for i in numpy.arange(len(txt_out)):
+                sys.stdout.write('\b')
+            for i in numpy.arange(len(txt_out)):
+                sys.stdout.write(' ')
+            for i in numpy.arange(len(txt_out)):
+                sys.stdout.write('\b')
+            sys.stdout.flush()'''
 
         retval.append([x, y])
 

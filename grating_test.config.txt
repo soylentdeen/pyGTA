@@ -12,8 +12,8 @@ SWEEP_START_BETA = -3.5
 SWEEP_STOP_BETA = 2.5
 
 #n_ref(sweep)_pts - Number of intermediate angles at which the background will be sampled
-N_REF_PTS = 30
-N_SWEEP_PTS = 15
+N_REF_PTS = 5
+N_SWEEP_PTS = 3
 
 #settle_time - Time to wait in between measurements (to allow for motors to move, signals to stabilize, etc...)
 SETTLE_TIME = 1.0
@@ -76,7 +76,7 @@ FP_OPEN = 2
 #==================================
 
 #lockin_comm - Communications port for the Lock-in Amplifier
-LOCKIN_COMM = 4
+LOCKIN_COMM = 7
 
 #lockin_baudrate - Baudrate for the Lock-in Amplifier
 LOCKIN_BAUDRATE = 19200
@@ -94,7 +94,7 @@ LOCKIN_TIMEOUT = 5
 LOCKIN_T_MIN = 5
 
 #lockin_t_max = Maximum time to spend collecting data before "throwing in the towel" (seconds)
-LOCKIN_T_MAX = 7
+LOCKIN_T_MAX = 15
 
 #lockin_autorange = Boolean (True/False) as to whether to use auto-ranging
 LOCKIN_AUTORANGE = TRUE

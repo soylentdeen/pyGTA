@@ -48,6 +48,9 @@ Returns:
 
         return self.gain
 
+    #def stabilize_gain_setting(self):
+        
+
     '''
 function: measure_const_SNR(self, SNR_min)
 =================================
